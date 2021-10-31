@@ -93,7 +93,7 @@ String displayStr = "";
 byte numInput = 1;
 byte numHidden = 1;
 byte numOutput = 1;
-unsigned int numPattern = 1;
+unsigned int numPattern = 0;
 float learningRate = 0.5;
 float momentum = 0.1;
 unsigned long maxEpochs = 1000;
@@ -389,18 +389,24 @@ void execMMI(String cmd, String params)
       {
         unsigned short pin = limitUintValue(svalue0.toInt(), 14, 19);
         unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numInput-1);
-
-        inputPins[neuron] = pin;
-        pinMode(pin, INPUT);
+        invalidPin = checkAnalogPin(pin) ? 0: 1;
+        if (invalidPin == 0)
+        {
+          inputPins[neuron] = pin;
+          pinMode(pin, INPUT);
+        }
       }
       break;
     case 32:
       {
         unsigned short pin = limitUintValue(svalue0.toInt(), 0, 19);
         unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numOutput-1);
-
-        outputPins[neuron] = pin;
-        pinMode(pin, OUTPUT);
+        invalidPin = checkPWMPin(pin) ? 0: 1;
+        if (invalidPin == 0)
+        {
+          outputPins[neuron] = pin;
+          pinMode(pin, OUTPUT);
+        }
       }
       break;
     case 33:
@@ -430,10 +436,13 @@ void execMMI(String cmd, String params)
       break;
     case 42:
       {
-        trainingActive = 1;
-        printFilledStr("NETWORK TRAINING", 0);
-        printFilledStr("PLEASE WAIT...", 1);
-        nn->train(patterns, targets, numPattern, maxEpochs, desiredError, learningRate, momentum);
+        if ((numPattern > 0) && (annCreated == 1))
+        {
+          trainingActive = 1;
+          printFilledStr("NETWORK TRAINING", 0);
+          printFilledStr("PLEASE WAIT...", 1);
+          nn->train(patterns, targets, numPattern, maxEpochs, desiredError, learningRate, momentum);
+        }
       }
       break;
     case 43:
