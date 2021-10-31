@@ -16,6 +16,7 @@ class Scheduler
   public:
     void init(void);
     unsigned short add(void ( *)(void), unsigned int);
+    void setPeriod(unsigned int index, unsigned int period);
     void  dispatch(void);
 };
 

@@ -17,6 +17,7 @@ https://github.com/dariuszrorat/bpnn
       *22*XX#             set momentum divided by 100
       *23*XX#             set max epochs
       *24*XX#             set desired error divided by 1000000
+      *25*XX#             set calculation interval ms
       *31*XX*YY           assign XX pin to YY input neuron number, YY = 0..neurons-1
       *32*XX*YY           assign XX pin to YY output neuron number, YY = 0..neurons-1
       *33*XX*YY*ZZ#       set pattern at XX index from YY pin and ZZ value if NN created

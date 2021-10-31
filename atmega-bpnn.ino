@@ -10,6 +10,7 @@
       22*XX#             set momentum divided by 100
       23*XX#             set max epochs
       24*XX#             set desired error divided by 1000000
+      25*XX#             set calculation interval ms
       31*XX*YY           assign XX pin to YY input neuron number, YY = 0..neurons-1
       32*XX*YY           assign XX pin to YY output neuron number, YY = 0..neurons-1
       33*XX*YY*ZZ#       set pattern at XX index from YY pin and ZZ value if NN created
@@ -33,7 +34,7 @@
 #include "limits.h"
 
 #define BUZZ_PIN 6
-#define NUM_COMMANDS 17
+#define NUM_COMMANDS 18
 #define DISPLAY_TIME 3 // 3x2s
 #define IDLE_TIME 75 // 1,25*60s
 
@@ -59,6 +60,7 @@ const char* MMI_COMMANDS[NUM_COMMANDS]
   "*22*",
   "*23*",
   "*24*",
+  "*25*",
   "*31*",
   "*32*",
   "*33*",
@@ -101,6 +103,7 @@ float desiredError = 0.01;
 byte annCreated = 0;
 byte trainingActive = 0;
 byte annActive = 0;
+unsigned int calculationInterval = 100;
 
 float ** patterns;
 float ** targets;
@@ -120,7 +123,7 @@ void setup()
   Sch.init();
   Sch.add(ledUpdate, 500);
   Sch.add(keyUpdate, 1);
-  Sch.add(annCompute, 500);
+  Sch.add(annCompute, 100);
 
   printFilledStr("WELCOME TO MMI", 0);
   printFilledStr("NEURAL NETWORK", 1);
@@ -382,6 +385,12 @@ void execMMI(String cmd, String params)
     case 24:
       {
         desiredError = (float) limitUintValue(svalue0.toInt(), 1, 32767) / 100.0;
+      }
+      break;
+    case 25:
+      {
+        calculationInterval = limitUintValue(svalue0.toInt(), 50, 65535);
+        Sch.setPeriod(2, calculationInterval);
       }
       break;
 

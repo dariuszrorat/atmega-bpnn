@@ -22,6 +22,11 @@ unsigned short Scheduler::add(void (*fn)(), unsigned int period)
   return taskindex;
 }
 
+void Scheduler::setPeriod(unsigned int index, unsigned int period)
+{
+  tasks[index].period = period;
+}
+
 void Scheduler::dispatch(void)
 {
   unsigned short i;
