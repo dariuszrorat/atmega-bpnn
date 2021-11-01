@@ -103,7 +103,7 @@ float desiredError = 0.01;
 byte annCreated = 0;
 byte trainingActive = 0;
 byte annActive = 0;
-unsigned int calculationInterval = 100;
+unsigned int calculationInterval = 500;
 
 float ** patterns;
 float ** targets;
@@ -123,7 +123,7 @@ void setup()
   Sch.init();
   Sch.add(ledUpdate, 500);
   Sch.add(keyUpdate, 1);
-  Sch.add(annCompute, 100);
+  Sch.add(annCompute, 500);
 
   printFilledStr("WELCOME TO MMI", 0);
   printFilledStr("NEURAL NETWORK", 1);
@@ -284,8 +284,10 @@ void annCompute()
 
   for (j = 0; j < numOutput; j++)
   {
+    if (output[j] < 0) output[j] = 0;
     analogWrite(outputPins[j], output[j] * 255);
   }
+
 }
 
 void scanMMI()
@@ -384,7 +386,7 @@ void execMMI(String cmd, String params)
       break;
     case 24:
       {
-        desiredError = (float) limitUintValue(svalue0.toInt(), 1, 32767) / 100.0;
+        desiredError = (float) limitUintValue(svalue0.toInt(), 1, 1000000) / 1000000.0;
       }
       break;
     case 25:
@@ -397,8 +399,8 @@ void execMMI(String cmd, String params)
     case 31:
       {
         unsigned short pin = limitUintValue(svalue0.toInt(), 14, 19);
-        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numInput-1);
-        invalidPin = checkAnalogPin(pin) ? 0: 1;
+        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numInput - 1);
+        invalidPin = checkAnalogPin(pin) ? 0 : 1;
         if (invalidPin == 0)
         {
           inputPins[neuron] = pin;
@@ -409,8 +411,8 @@ void execMMI(String cmd, String params)
     case 32:
       {
         unsigned short pin = limitUintValue(svalue0.toInt(), 0, 19);
-        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numOutput-1);
-        invalidPin = checkPWMPin(pin) ? 0: 1;
+        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numOutput - 1);
+        invalidPin = checkPWMPin(pin) ? 0 : 1;
         if (invalidPin == 0)
         {
           outputPins[neuron] = pin;
@@ -420,8 +422,8 @@ void execMMI(String cmd, String params)
       break;
     case 33:
       {
-        unsigned short index = limitUintValue(svalue0.toInt(), 0, numPattern-1);
-        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numInput-1);
+        unsigned short index = limitUintValue(svalue0.toInt(), 0, numPattern - 1);
+        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numInput - 1);
         unsigned short value = limitUintValue(svalue2.toInt(), 0, 1023);
 
         patterns[index][neuron] = value / 1023.0;
@@ -429,8 +431,8 @@ void execMMI(String cmd, String params)
       break;
     case 34:
       {
-        unsigned short index = limitUintValue(svalue0.toInt(), 0, numPattern-1);
-        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numInput-1);
+        unsigned short index = limitUintValue(svalue0.toInt(), 0, numPattern - 1);
+        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numInput - 1);
         unsigned short value = limitUintValue(svalue2.toInt(), 0, 1023);
 
         targets[index][neuron] = value / 255.0;
@@ -450,7 +452,11 @@ void execMMI(String cmd, String params)
           trainingActive = 1;
           printFilledStr("NETWORK TRAINING", 0);
           printFilledStr("PLEASE WAIT...", 1);
-          nn->train(patterns, targets, numPattern, maxEpochs, desiredError, learningRate, momentum);
+          int endepochs; float enderror;
+          nn->train(patterns, targets, numPattern, maxEpochs, desiredError, learningRate, momentum, &endepochs, &enderror);
+          printFilledStr("EPOCHS: " + String(endepochs), 0);
+          printFilledStr("ERROR : " + String(enderror), 1);
+          delay(2000);
         }
       }
       break;
