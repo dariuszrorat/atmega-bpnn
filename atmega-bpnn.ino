@@ -28,13 +28,13 @@
 #include <Keypad.h>
 #include <bpnn.h>
 
+#include "mmicode.h"
 #include "strings.h"
 #include "pins.h"
 #include "scheduler.h"
 #include "limits.h"
 
 #define BUZZ_PIN 6
-#define NUM_COMMANDS 18
 #define DISPLAY_TIME 3 // 3x2s
 #define IDLE_TIME 75 // 1,25*60s
 
@@ -51,28 +51,6 @@ char hexaKeys[ROWS][COLS] = {
   {'*', '0', '#', 'D'}
 };
 
-const char* MMI_COMMANDS[NUM_COMMANDS]
-{
-  "*00*",
-  "*11*",
-  "*12*",
-  "*21*",
-  "*22*",
-  "*23*",
-  "*24*",
-  "*25*",
-  "*31*",
-  "*32*",
-  "*33*",
-  "*34*",
-  "*41*",
-  "*42*",
-  "*43*",
-  "*44*",
-  "*51*",
-  "*52*"
-};
-
 byte rowPins[ROWS] = {13, 12, 11, 8};
 byte colPins[COLS] = {7, 5, 4, 3};
 
@@ -87,8 +65,8 @@ byte invalidPin = 0;
 byte dispCounter = 0;
 byte idleCounter = 0;
 
-String MMI = "";
-String lastMMI = "";
+String shortcode = "";
+String lastShortcode = "";
 String displayTitle = "";
 String displayStr = "";
 
@@ -124,6 +102,26 @@ void setup()
   Sch.add(ledUpdate, 500);
   Sch.add(keyUpdate, 1);
   Sch.add(annCompute, 500);
+
+  Mmi.init();
+  Mmi.add("*00*", repeatLastCode);
+  Mmi.add("*11*", setlayers);
+  Mmi.add("*12*", setPatternCount);
+  Mmi.add("*21*", setLearningRate);
+  Mmi.add("*22*", setMomentum);
+  Mmi.add("*23*", setMaxEpochs);
+  Mmi.add("*24*", setDesiredError);
+  Mmi.add("*25*", setCalculationInterval);
+  Mmi.add("*31*", assignInput);
+  Mmi.add("*32*", assignOutput);
+  Mmi.add("*33*", setPattern);
+  Mmi.add("*34*", setTarget);
+  Mmi.add("*41*", createNetwork);
+  Mmi.add("*42*", startTraining);
+  Mmi.add("*43*", enableCalculation);
+  Mmi.add("*44*", disableCalculation);
+  Mmi.add("*51*", saveWeights);
+  Mmi.add("*52*", loadWeights);
 
   printFilledStr("WELCOME TO MMI", 0);
   printFilledStr("NEURAL NETWORK", 1);
@@ -161,28 +159,28 @@ void keyUpdate()
     {
       case 'A':
         {
-          MMI = "";
+          shortcode = "";
           entering = 0;
         }
         break;
       case 'B':
         {
-          MMI = MMI.substring(0, MMI.length() - 1);
+          shortcode = shortcode.substring(0, shortcode.length() - 1);
         }
         break;
-      case 'C': MMI = ""; break;
+      case 'C': shortcode = ""; break;
       case 'D':
         {
           scanMMI();
-          lastMMI = MMI;
-          MMI = "";
+          lastShortcode = shortcode;
+          shortcode = "";
         }
         break;
       default:
         {
-          if (MMI.length() < 16)
+          if (shortcode.length() < 16)
           {
-            MMI += key;
+            shortcode += key;
           }
         }
         break;
@@ -194,7 +192,7 @@ void keyUpdate()
 
 void ledUpdate()
 {
-
+  
   idleCounter += 1;
   if (idleCounter == (2 * IDLE_TIME))
   {
@@ -205,56 +203,25 @@ void ledUpdate()
 
   if (invalidMMI == 1)
   {
-    printFilledStr("ERROR", 0);
-    printFilledStr("INVALID CODE", 1);
-    dispCounter += 1;
-    if (dispCounter >= DISPLAY_TIME)
-    {
-      invalidMMI = 0;
-      dispCounter = 0;
-    }
+    printError("ERROR", "INVALID CODE", &invalidMMI);
     return;
   }
 
   if (invalidPin == 1)
   {
-    printFilledStr("ERROR", 0);
-    printFilledStr("INVALID PIN", 1);
-    dispCounter += 1;
-    if (dispCounter >= DISPLAY_TIME)
-    {
-      invalidPin = 0;
-      dispCounter = 0;
-    }
+    printError("ERROR", "INVALID PIN", &invalidPin);
     return;
   }
 
   if (entering == 1)
   {
-    printFilledStr("ENTER MMI CODE", 0);
-    if (blnk == 0)
-    {
-      printFilledStr(MMI, 1);
-    }
-    else
-    {
-      printFilledStr(MMI + '_', 1);
-    }
-    blnk += 1;
-    if (blnk == 2) blnk = 0;
+    printEntering();
     return;
   }
 
   if (displayInfo == 1)
   {
-    printFilledStr(displayTitle, 0);
-    printFilledStr(displayStr, 1);
-    dispCounter += 1;
-    if (dispCounter >= (DISPLAY_TIME * 2))
-    {
-      displayInfo = 0;
-      dispCounter = 0;
-    }
+    printInfo();
     return;
   }
 
@@ -285,202 +252,158 @@ void annCompute()
 
 void scanMMI()
 {
-  int i;
   invalidMMI = 1;
-
   entering = 1;
-  String cmd = MMI.substring(0, 4);
-  String params = MMI.substring(4, MMI.length() - 1);
-  String existingCmd;
+  bool execResult = Mmi.exec(shortcode);
+  invalidMMI = execResult ? 0 : 1;
+  entering = execResult ? 0 : 1;
+}
 
-  int len = MMI.length();
-
-  for (i = 0; i < NUM_COMMANDS; i++)
+void repeatLastCode(long val0, long val1, long val2)
+{
+  if (lastShortcode != "")
   {
-    existingCmd = MMI_COMMANDS[i];
-    if (cmd == existingCmd)
-    {
-      invalidMMI = 0;
-      entering = 0;
-      break;
-    }
-  }
-
-  if ((len > 0) && (MMI[len - 1] != '#'))
-  {
-    invalidMMI = 1;
-    entering = 1;
-  }
-
-  if (invalidMMI == 0)
-  {
-    execMMI(cmd, params);
+    shortcode = lastShortcode;
+    scanMMI();
   }
 }
 
-void execMMI(String cmd, String params)
+void setlayers(long val0, long val1, long val2)
 {
-  String cm = cmd.substring(1, 3);
-  int command = cm.toInt();
-  String svalue0 = trimAll(getParam(params, '*', 0));
-  String svalue1 = trimAll(getParam(params, '*', 1));
-  String svalue2 = trimAll(getParam(params, '*', 2));
+  numInput = limitUintValue(val0, 1, 3);
+  numHidden = limitUintValue(val1, 1, 6);
+  numOutput = limitUintValue(val2, 1, 3);
+  input = new float[numInput];
+  inputPins = new byte[numInput];
+  output = new float[numOutput];
+  outputPins = new byte[numOutput];
+}
 
-  switch (command)
+void setPatternCount(long val0, long val1, long val2)
+{
+  numPattern = limitUintValue(val0, 1, 10);
+  patterns = new float* [numPattern];
+  targets = new float* [numPattern];
+  int i;
+  for (int i = 0; i < numPattern; i++)
   {
-    case 00: //repeat last MMI command
-      {
-        if (lastMMI != "")
-        {
-          MMI = lastMMI;
-          scanMMI();
-        }
-      }
-      break;
-    case 11:
-      {
-        numInput = limitUintValue(svalue0.toInt(), 1, 3);
-        numHidden = limitUintValue(svalue1.toInt(), 1, 6);
-        numOutput = limitUintValue(svalue2.toInt(), 1, 3);
-        input = new float[numInput];
-        inputPins = new byte[numInput];
-        output = new float[numOutput];
-        outputPins = new byte[numOutput];
-      }
-      break;
-    case 12:
-      {
-        numPattern = limitUintValue(svalue0.toInt(), 1, 10);
-        patterns = new float* [numPattern];
-        targets = new float* [numPattern];
-        int i;
-        for (int i = 0; i < numPattern; i++)
-        {
-          patterns[i] = new float[numInput];
-          targets[i] = new float[numOutput];
-        }
-      }
-      break;
+    patterns[i] = new float[numInput];
+    targets[i] = new float[numOutput];
+  }
+}
 
-    case 21:
-      {
-        learningRate = (float) limitUintValue(svalue0.toInt(), 1, 32767) / 100.0;
-      }
-      break;
-    case 22:
-      {
-        momentum = (float) limitUintValue(svalue0.toInt(), 1, 32767) / 100.0;
-      }
-      break;
-    case 23:
-      {
-        maxEpochs = limitUintValue(svalue0.toInt(), 1, 1000000);
-      }
-      break;
-    case 24:
-      {
-        desiredError = (float) limitUintValue(svalue0.toInt(), 1, 1000000) / 1000000.0;
-      }
-      break;
-    case 25:
-      {
-        calculationInterval = limitUintValue(svalue0.toInt(), 50, 65535);
-        Sch.setPeriod(2, calculationInterval);
-      }
-      break;
+void setLearningRate(long val0, long val1, long val2)
+{
+  learningRate = (float) limitUintValue(val0, 1, 32767) / 100.0;
+}
 
-    case 31:
-      {
-        unsigned short pin = limitUintValue(svalue0.toInt(), 14, 19);
-        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numInput - 1);
-        invalidPin = checkAnalogPin(pin) ? 0 : 1;
-        if (invalidPin == 0)
-        {
-          inputPins[neuron] = pin;
-          pinMode(pin, INPUT);
-        }
-      }
-      break;
-    case 32:
-      {
-        unsigned short pin = limitUintValue(svalue0.toInt(), 0, 19);
-        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numOutput - 1);
-        invalidPin = checkPWMPin(pin) ? 0 : 1;
-        if (invalidPin == 0)
-        {
-          outputPins[neuron] = pin;
-          pinMode(pin, OUTPUT);
-        }
-      }
-      break;
-    case 33:
-      {
-        unsigned short index = limitUintValue(svalue0.toInt(), 0, numPattern - 1);
-        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numInput - 1);
-        unsigned short value = limitUintValue(svalue2.toInt(), 0, 1023);
+void setMomentum(long val0, long val1, long val2)
+{
+  momentum = (float) limitUintValue(val0, 1, 32767) / 100.0;
+}
 
-        patterns[index][neuron] = value / 1023.0;
-      }
-      break;
-    case 34:
-      {
-        unsigned short index = limitUintValue(svalue0.toInt(), 0, numPattern - 1);
-        unsigned short neuron = limitUintValue(svalue1.toInt(), 0, numInput - 1);
-        unsigned short value = limitUintValue(svalue2.toInt(), 0, 1023);
+void setMaxEpochs(long val0, long val1, long val2)
+{
+  maxEpochs = limitUintValue(val0, 1, 1000000);
+}
 
-        targets[index][neuron] = value / 255.0;
-      }
-      break;
+void setDesiredError(long val0, long val1, long val2)
+{
+  desiredError = (float) limitUintValue(val0, 1, 1000000) / 1000000.0;
+}
 
-    case 41:
-      {
-        nn = new BPNN(numInput, numHidden, numOutput);
-        annCreated = 1;
-      }
-      break;
-    case 42:
-      {
-        if ((numPattern > 0) && (annCreated == 1))
-        {
-          trainingActive = 1;
-          printFilledStr("NETWORK TRAINING", 0);
-          printFilledStr("PLEASE WAIT...", 1);
-          int endepochs; float enderror;
-          nn->train(patterns, targets, numPattern, maxEpochs, desiredError, learningRate, momentum, &endepochs, &enderror);
-          printFilledStr("EPOCHS: " + String(endepochs), 0);
-          printFilledStr("ERROR : " + String(enderror), 1);
-          delay(2000);
-        }
-      }
-      break;
-    case 43:
-      {
-        annActive = 1;
-      }
-      break;
-    case 44:
-      {
-        annActive = 0;
-      }
-      break;
+void setCalculationInterval(long val0, long val1, long val2)
+{
+  calculationInterval = limitUintValue(val0, 50, 65535);
+  Sch.setPeriod(2, calculationInterval);
+}
 
-    case 51:
-      {
-        if (annCreated)
-        {
-          nn->save();
-        }
-      }
-      break;
-    case 52:
-      {
-        if (annCreated)
-        {
-          nn->load();
-        }
-      }
-      break;
+void assignInput(long val0, long val1, long val2)
+{
+  unsigned short pin = limitUintValue(val0, 14, 19);
+  unsigned short neuron = limitUintValue(val1, 0, numInput - 1);
+  invalidPin = checkAnalogPin(pin) ? 0 : 1;
+  if (invalidPin == 0)
+  {
+    inputPins[neuron] = pin;
+    pinMode(pin, INPUT);
+  }
+}
 
+void assignOutput(long val0, long val1, long val2)
+{
+  unsigned short pin = limitUintValue(val0, 0, 19);
+  unsigned short neuron = limitUintValue(val1, 0, numOutput - 1);
+  invalidPin = checkPWMPin(pin) ? 0 : 1;
+  if (invalidPin == 0)
+  {
+    outputPins[neuron] = pin;
+    pinMode(pin, OUTPUT);
+  }
+}
+
+void setPattern(long val0, long val1, long val2)
+{
+  unsigned short index = limitUintValue(val0, 0, numPattern - 1);
+  unsigned short neuron = limitUintValue(val1, 0, numInput - 1);
+  unsigned short value = limitUintValue(val2, 0, 1023);
+
+  patterns[index][neuron] = value / 1023.0;
+}
+
+void setTarget(long val0, long val1, long val2)
+{
+  unsigned short index = limitUintValue(val0, 0, numPattern - 1);
+  unsigned short neuron = limitUintValue(val1, 0, numInput - 1);
+  unsigned short value = limitUintValue(val2, 0, 1023);
+
+  targets[index][neuron] = value / 255.0;
+}
+
+void createNetwork(long val0, long val1, long val2)
+{
+  nn = new BPNN(numInput, numHidden, numOutput);
+  annCreated = 1;
+}
+
+void startTraining(long val0, long val1, long val2)
+{
+  if ((numPattern > 0) && (annCreated == 1))
+  {
+    trainingActive = 1;
+    printFilledStr("NETWORK TRAINING", 0);
+    printFilledStr("PLEASE WAIT...", 1);
+    int endepochs; float enderror;
+    nn->train(patterns, targets, numPattern, maxEpochs, desiredError, learningRate, momentum, &endepochs, &enderror);
+    printFilledStr("EPOCHS: " + String(endepochs), 0);
+    printFilledStr("ERROR : " + String(enderror), 1);
+    delay(2000);
+  }
+}
+
+void enableCalculation(long val0, long val1, long val2)
+{
+  annActive = 1;
+}
+
+void disableCalculation(long val0, long val1, long val2)
+{
+  annActive = 0;
+}
+
+void saveWeights(long val0, long val1, long val2)
+{
+  if (annCreated)
+  {
+    nn->save();
+  }
+}
+
+void loadWeights(long val0, long val1, long val2)
+{
+  if (annCreated)
+  {
+    nn->load();
   }
 }
 
@@ -488,4 +411,43 @@ void printFilledStr(String s, int row)
 {
   lcd.setCursor(0, row);
   lcd.print(filledStr(s, 16));
+}
+
+void printError(String caption, String message, byte *code)
+{
+  printFilledStr(caption, 0);
+  printFilledStr(message, 1);
+  dispCounter += 1;
+  if (dispCounter >= DISPLAY_TIME)
+  {
+    *code = 0;
+    dispCounter = 0;
+  }
+}
+
+void printEntering()
+{
+  printFilledStr("ENTER MMI CODE", 0);
+  if (blnk == 0)
+  {
+    printFilledStr(shortcode, 1);
+  }
+  else
+  {
+    printFilledStr(shortcode + '_', 1);
+  }
+  blnk += 1;
+  if (blnk == 2) blnk = 0;
+}
+
+void printInfo()
+{
+  printFilledStr(displayTitle, 0);
+  printFilledStr(displayStr, 1);
+  dispCounter += 1;
+  if (dispCounter >= (DISPLAY_TIME * 2))
+  {
+    displayInfo = 0;
+    dispCounter = 0;
+  }
 }
