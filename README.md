@@ -71,3 +71,5 @@ Architecture:
 
 
 ```
+
+![Circuit.](circuit.png "Circuit.")
